@@ -76,3 +76,16 @@ class SumPool(nn.Module):
             C[:, i::2, j::2, :] += S * 0.25
         R = self.X*C
         return R
+
+class Flatten(nn.Module):
+    def __init__(self, start_dim, end_dim):
+        super(Flatten, self).__init__()
+        self.start_dim = start_dim
+        self.end_dim = end_dim
+
+    def forward(self, x):
+        self.X = x
+        return torch.flatten(x, self.start_dim, self.end_dim)
+
+    def analyze(self, method, R):
+        return torch.reshape(R, self.X.shape)

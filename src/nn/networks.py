@@ -31,20 +31,21 @@ class ExplainableNet(nn.Module):
         self.R = 0
 
     def fill_layers(self, model):
+        if hasattr(model, 'seq'):
+            layers = list(model.seq) 
+        elif hasattr(model, 'features') and hasattr(model, 'classifier'):
+            layers = list(model.features) + list(model.classifier)
+        else:
+            raise "Unsupported Network Architecture."
+
         lrp_rule = self.lrp_rule_first_layer
 
-        for layer in model.features:
+        for layer in layers:
             new_layer = self.create_layer(layer, lrp_rule)
             if new_layer == 0:
                 continue
             self.layers.append(new_layer)
             lrp_rule = self.lrp_rule_next_layers
-
-        for layer in model.classifier:
-            new_layer = self.create_layer(layer, lrp_rule)
-            if new_layer == 0:
-                continue
-            self.layers.append(new_layer)
 
     def create_layer(self, layer, lrp_rule):
         if type(layer) == torch.nn.Conv2d:
@@ -70,6 +71,9 @@ class ExplainableNet(nn.Module):
             new_layer.linear.weight.data = layer.weight.data
             new_layer.linear.bias.data = layer.bias.data
 
+        elif isinstance(layer, nn.Flatten):
+            new_layer = Flatten(start_dim=layer.start_dim, end_dim=layer.end_dim)
+
         elif type(layer) == (nn.Dropout or nn.Dropout2d):
             new_layer = layer
 
@@ -77,7 +81,7 @@ class ExplainableNet(nn.Module):
             return 0
 
         else:
-            print('ERROR: unknown layer')
+            print('ERROR: unknown layer', type(layer))
             return None
 
         return new_layer
@@ -97,11 +101,11 @@ class ExplainableNet(nn.Module):
 
         return x
 
-    def change_lrp_rules(self, lrp_rule_fl, lrp_rule_nl, alpha=None, beta=None):
+    def change_lrp_rules(self, lrp_rule_fl=LRPRule.z_b, lrp_rule_nl=LRPRule.alpha_beta, alpha=None, beta=None):
         lrp_rule = lrp_rule_fl
         for layer in self.layers:
             if type(layer) == nn.Dropout or type(layer) == nn.Dropout2d or type(
-                    layer) == MaxPool:  # ignore dropout and pooling layer layer
+                    layer) == MaxPool or type(layer) == Flatten:  # ignore dropout and pooling layer layer
                 continue
             layer.set_lrp_rule(lrp_rule, alpha, beta)
             lrp_rule = lrp_rule_nl
@@ -112,10 +116,12 @@ class ExplainableNet(nn.Module):
 
     def analyze(self, method=ExplainingMethod.lrp, R=None, index=None):
         if R is None:
+            # use manually passed indeces
             R = self.R
         if index is not None:
+            # mask out everything expect the desired index
             R=self.R.clone()
-            indices = np.ones(1000).astype(bool)
+            indices = np.ones(R[0].shape).astype(bool)
             indices[index] = False
             indices = np.where(indices)[0]
             R[0][indices] = 0
