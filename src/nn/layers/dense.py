@@ -22,6 +22,7 @@ class Dense(nn.Module):
         self.lrp_rule = lrp_rule
         self.alpha = 1.0
         self.beta = 0.0
+        self.gamma = 0.0
 
         self.lowest = np.min((0 - data_mean) / data_std)
         self.highest = np.max((1 - data_mean) / data_std)
@@ -119,10 +120,11 @@ class Dense(nn.Module):
 
         return newR
 
-    def set_lrp_rule(self, lrp_rule, alpha=None, beta=None):
+    def set_lrp_rule(self, lrp_rule, alpha=None, beta=None, gamma=None):
         if alpha is not None and beta is not None:
             self.alpha = alpha
             self.beta = beta
+            self.gamma = gamma
         self.lrp_rule = lrp_rule
 
     def _lrp_backward(self, R):
@@ -130,8 +132,10 @@ class Dense(nn.Module):
             return self._lrp_zb(R)
         elif self.lrp_rule == LRPRule.z_plus:
             return self._lrp_zp(R)
-        else:
+        elif self.lrp_rule == LRPRule.alpha_beta:
             return self._lrp_alpha_beta(R)
+        elif self.lrp_rule == LRPRule.gamma:
+            return self._lrp_gamma(R)
 
     def _lrp_zp(self, R):
 
@@ -171,6 +175,24 @@ class Dense(nn.Module):
         C = S.mm(V)
         RM = self.beta * X * C
         Rnew = RP - RM
+
+        return Rnew
+
+    def _lrp_gamma(self, R):
+
+        X = self.X
+
+        weight = self.linear.weight
+
+        if self.batch_norm is not None:
+            weight = weight * self.batch_norm.weight.unsqueeze(1) / torch.sqrt(
+                self.batch_norm.running_var.unsqueeze(1) + self.batch_norm.eps)
+
+        V = weight + weight.clamp(min=0.0)
+        Z = X.mm(V.t()) + 1e-9
+        S = R / Z
+        C = S.mm(V)
+        Rnew = X * C
 
         return Rnew
 

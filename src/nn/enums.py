@@ -6,6 +6,7 @@ class LRPRule(enum.Enum):
     z_b = 1
     alpha_beta = 2
     alpha_beta_bias = 3
+    gamma = 4
 
 
 class ExplainingMethod(enum.Enum):

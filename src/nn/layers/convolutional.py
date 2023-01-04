@@ -20,6 +20,7 @@ class Convolutional(nn.Module):
         self.pre_activation = 0
         self.alpha = 1.0
         self.beta = 0.0
+        self.gamma = 0.0
 
         if data_mean is not None and data_std is not None:
             self.lowest = float(np.min((0 - data_mean) / data_std))
@@ -122,20 +123,23 @@ class Convolutional(nn.Module):
 
         return newR
 
-    def set_lrp_rule(self, lrp_rule, alpha=None, beta=None):
+    def set_lrp_rule(self, lrp_rule, alpha=None, beta=None, gamma=None):
         if alpha is not None and beta is not None:
             self.alpha = alpha
             self.beta = beta
+            self.gamma = gamma
         self.lrp_rule = lrp_rule
 
     def _lrp_backward(self, R):
 
         if self.lrp_rule == LRPRule.z_b:
             return self._lrp_zb(R)
-        elif self.lrp_rule == LRPRule.alpha_beta:
-            return self._lrp_alpha_beta(R)
         elif self.lrp_rule == LRPRule.z_plus:
             return self._lrp_zp(R)
+        elif self.lrp_rule == LRPRule.alpha_beta:
+            return self._lrp_alpha_beta(R)
+        elif self.lrp_rule == LRPRule.gamma:
+            return self._lrp_gamma(R)
 
     def _lrp_alpha_beta(self, R):
         _, _, height_filter, width_filter = self.conv.weight.shape
@@ -154,6 +158,18 @@ class Convolutional(nn.Module):
         SB = -self.beta * R / ZB
 
         newR = self.X * (self.deconvolve(SA, p_weights) + self.deconvolve(SB, n_weights))
+
+        return newR
+
+    def _lrp_gamma(self, R):
+        mod_weights = self.conv.weight + self.gamma * self.conv.weight.clamp(min=0)
+
+        Z = torch.nn.functional.conv2d(input=self.X, weight=mod_weights, bias=None, padding=self.conv.padding,
+                                        stride=self.conv.stride, groups=self.conv.groups,
+                                        dilation=self.conv.dilation) + 1e-9
+        S = R / Z
+
+        newR = self.X * self.deconvolve(S, mod_weights)
 
         return newR
 

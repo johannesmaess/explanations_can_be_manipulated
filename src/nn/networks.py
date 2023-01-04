@@ -8,11 +8,12 @@ import numpy as np
 
 class ExplainableNet(nn.Module):
     def __init__(self, model=None, data_mean=0, data_std=1, lrp_rule_first_layer=LRPRule.z_b,
-                 lrp_rule_next_layers=LRPRule.alpha_beta, beta=None):
+                 lrp_rule_next_layers=LRPRule.alpha_beta, beta=None, gamma=None):
         super(ExplainableNet, self).__init__()
 
         # replace relus by differentiable counterpart for beta growth
         self.beta = beta
+        self.gamma = gamma
         self.activation_fn = F.relu if beta is None else torch.nn.Softplus(beta=self.beta)
 
         self.layers = nn.ModuleList([])
@@ -22,8 +23,12 @@ class ExplainableNet(nn.Module):
         self.data_mean = data_mean
         self.data_std = data_std
 
+
+        print(model is not None)
         if model is not None:
             self.fill_layers(model)
+            alpha = 1-self.beta if self.beta is not None else None
+            self.change_lrp_rules(aplha=alpha, beta=self.beta, gamma=self.gamma) # note: I'm not sure where to get alpha from.
 
         # remove activation function in last layer
         self.layers[-1].activation_fn = None
@@ -101,13 +106,13 @@ class ExplainableNet(nn.Module):
 
         return x
 
-    def change_lrp_rules(self, lrp_rule_fl=LRPRule.z_b, lrp_rule_nl=LRPRule.alpha_beta, alpha=None, beta=None):
+    def change_lrp_rules(self, lrp_rule_fl=LRPRule.z_b, lrp_rule_nl=LRPRule.alpha_beta, alpha=None, beta=None, gamma=None):
         lrp_rule = lrp_rule_fl
         for layer in self.layers:
             if type(layer) == nn.Dropout or type(layer) == nn.Dropout2d or type(
                     layer) == MaxPool or type(layer) == Flatten:  # ignore dropout and pooling layer layer
                 continue
-            layer.set_lrp_rule(lrp_rule, alpha, beta)
+            layer.set_lrp_rule(lrp_rule, alpha, beta, gamma)
             lrp_rule = lrp_rule_nl
 
     def classify(self, x):
