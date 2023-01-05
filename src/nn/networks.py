@@ -24,11 +24,11 @@ class ExplainableNet(nn.Module):
         self.data_std = data_std
 
 
-        print(model is not None)
         if model is not None:
             self.fill_layers(model)
-            alpha = 1-self.beta if self.beta is not None else None
-            self.change_lrp_rules(aplha=alpha, beta=self.beta, gamma=self.gamma) # note: I'm not sure where to get alpha from.
+            alpha = 1-self.beta if self.beta is not None else None # note: I'm not sure where to get alpha from.
+            self.change_lrp_rules(lrp_rule_fl=lrp_rule_first_layer, lrp_rule_nl=lrp_rule_next_layers, 
+                                    alpha=alpha, beta=self.beta, gamma=self.gamma)
 
         # remove activation function in last layer
         self.layers[-1].activation_fn = None
@@ -106,14 +106,17 @@ class ExplainableNet(nn.Module):
 
         return x
 
-    def change_lrp_rules(self, lrp_rule_fl=LRPRule.z_b, lrp_rule_nl=LRPRule.alpha_beta, alpha=None, beta=None, gamma=None):
-        lrp_rule = lrp_rule_fl
-        for layer in self.layers:
+    def change_lrp_rules(self, lrp_rule_fl=LRPRule.z_b, lrp_rule_nl=LRPRule.alpha_beta, alpha=None, beta=None, gamma=None, start_l=0, end_l=-1):
+        for layer in self.layers[start_l:end_l]:
             if type(layer) == nn.Dropout or type(layer) == nn.Dropout2d or type(
                     layer) == MaxPool or type(layer) == Flatten:  # ignore dropout and pooling layer layer
                 continue
-            layer.set_lrp_rule(lrp_rule, alpha, beta, gamma)
-            lrp_rule = lrp_rule_nl
+            layer.set_lrp_rule(lrp_rule_nl, alpha, beta, gamma)
+
+        if lrp_rule_fl is not None:
+            self.layers[0].set_lrp_rule(lrp_rule_fl, alpha, beta, gamma)
+
+        
 
     def classify(self, x):
         outputs = self.forward(x)

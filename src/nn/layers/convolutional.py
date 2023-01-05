@@ -127,6 +127,7 @@ class Convolutional(nn.Module):
         if alpha is not None and beta is not None:
             self.alpha = alpha
             self.beta = beta
+        if gamma is not None:
             self.gamma = gamma
         self.lrp_rule = lrp_rule
 
