@@ -113,7 +113,9 @@ class ExplainableNet(nn.Module):
                 continue
             layer.set_lrp_rule(lrp_rule_nl, alpha, beta, gamma)
 
-        if lrp_rule_fl is not None:
+        if lrp_rule_fl==LRPRule.z_b:
+            self.layers[0].set_lrp_rule(LRPRule.z_b) # z_b rule does not require parameters
+        elif lrp_rule_fl is not None:
             self.layers[0].set_lrp_rule(lrp_rule_fl, alpha, beta, gamma)
 
         
