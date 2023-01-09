@@ -236,3 +236,15 @@ class Convolutional(nn.Module):
                                                            output_padding=output_padding)
 
         return deconvolved
+
+    def lrp_info(self):
+        s = f"Convolutional: {self.lrp_rule} "
+        pretty = lambda param: f"{round(float(param), 3)}{' *'[(type(param) is torch.Tensor) and param.requires_grad]}"
+        with torch.no_grad(): 
+            if self.lrp_rule in [LRPRule.alpha_beta, LRPRule.alpha_beta_bias]:
+                s += f"a={pretty(self.alpha)}, b={pretty(self.beta)}"
+            elif self.lrp_rule in [LRPRule.gamma]:
+                s += f"g={pretty(self.gamma)}"
+            elif self.lrp_rule in [LRPRule.z_b]:
+                s += f"lowest={pretty(self.lowest)} highest={pretty(self.highest)}"
+        return s

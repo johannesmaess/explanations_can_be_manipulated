@@ -56,12 +56,13 @@ def clamp(x, mean, std):
     return x
 
 
-def get_expl(model, x, method, desired_index=None, forward_result=None):
+def get_expl(model, x, method, desired_index=None, forward_result=None, full=False):
     """
     Helper method to get the heatmap
 
     desired_index: class index to be explained. None chooses the class index. 'other' chooses a different, random class.
     forward_result: allows to pass precomputed forward result. (TODO: gradient graph?)
+    full=True returns all information (does not take absolute or sum over channels, does not normalize.)
     """
     x.requires_grad = True
     if forward_result: acc, class_idx = forward_result
@@ -72,7 +73,6 @@ def get_expl(model, x, method, desired_index=None, forward_result=None):
         ret = []
         
     if desired_index == 'other': # explain a random class (other than the predicted class)
-        # second way
         batch_size, n_classes = acc.shape
         desired_index = torch.randint(low=0, high=n_classes-1, size=(batch_size, ))
         desired_index += (desired_index >= class_idx)
@@ -97,11 +97,13 @@ def get_expl(model, x, method, desired_index=None, forward_result=None):
     if method == ExplainingMethod.grad_times_input or method == ExplainingMethod.integrated_grad:
         heatmap = heatmap * x
 
-    heatmap = torch.sum(torch.abs(heatmap), dim=1)
+    if not full:
+        # take absolute and sum over channels
+        heatmap = torch.sum(torch.abs(heatmap), dim=1)
+        # normalize to L1 distance 1
+        heatmap = heatmap / torch.sum(heatmap)
 
-    normalized_heatmap = heatmap / torch.sum(heatmap)
-
-    return [normalized_heatmap, acc, class_idx] + ret
+    return [heatmap, acc, class_idx] + ret
 
 
 def torch_to_image(tensor, mean=0, std=1):
