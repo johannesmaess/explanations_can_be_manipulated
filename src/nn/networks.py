@@ -126,15 +126,12 @@ class ExplainableNet(nn.Module):
 
     def analyze(self, method=ExplainingMethod.lrp, R=None, index=None):
         if R is None:
-            # use manually passed indeces
-            R = self.R
+            R = self.R.clone()
         if index is not None:
             # mask out everything expect the desired index
-            R=self.R.clone()
-            indices = np.ones(R[0].shape).astype(bool)
-            indices[index] = False
-            indices = np.where(indices)[0]
-            R[0][indices] = 0
+            mask = torch.zeros(R.shape, dtype=int)
+            mask[np.arange(len(mask)), index] = 1
+            R = mask * R
 
         for layer in reversed(self.layers):
             if type(layer) == nn.Dropout or type(layer) == nn.Dropout2d:  # ignore Dropout layer
@@ -161,3 +158,8 @@ class ExplainableNet(nn.Module):
                     pass
                 else:
                     layer.compute_pattern()
+
+    def print_lrp_info(self):
+        for i, l in enumerate(self.layers):
+            try:    print(i, l.lrp_info())
+            except: print(i, str(l).split('(')[0])

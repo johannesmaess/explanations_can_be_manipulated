@@ -56,7 +56,7 @@ def clamp(x, mean, std):
     return x
 
 
-def get_expl(model, x, method, desired_index=None, forward_result=None, full=False):
+def get_expl(model, x, method, desired_index=None, R=None, forward_result=None, full=False, seed = 42):
     """
     Helper method to get the heatmap
 
@@ -65,17 +65,30 @@ def get_expl(model, x, method, desired_index=None, forward_result=None, full=Fal
     full=True returns all information (does not take absolute or sum over channels, does not normalize.)
     """
     x.requires_grad = True
-    if forward_result: acc, class_idx = forward_result
-    else:              acc, class_idx = model.classify(x)
+    if forward_result is None:
+        acc, class_idx = model.classify(x)
+    else:                      
+        assert forward_result.ndim == 2
+        acc, class_idx = forward_result, forward_result.argmax(axis=1)
 
+    ret = []
+    
     if desired_index is None:
         desired_index = class_idx
-        ret = []
-        
-    if desired_index == 'other': # explain a random class (other than the predicted class)
+
+    elif desired_index == 'other': # explain a random class (other than the predicted class)
         batch_size, n_classes = acc.shape
+
+        # make choice of 'other' class pseudorandom, dependent on current batch.
+        torch.manual_seed(seed)
+        seed_for_batch = (class_idx * torch.randint(low=-50, high=51, size=(batch_size,))).sum()
+        torch.manual_seed(seed_for_batch)
+
         desired_index = torch.randint(low=0, high=n_classes-1, size=(batch_size, ))
         desired_index += (desired_index >= class_idx)
+        ret = [desired_index]
+
+    else:
         ret = [desired_index]
 
     if method == ExplainingMethod.integrated_grad:
@@ -92,7 +105,12 @@ def get_expl(model, x, method, desired_index=None, forward_result=None, full=Fal
         y = (1 / num_summands) * torch.sum(y / prefactors, dim=0)
         heatmap = torch.autograd.grad(y, x, create_graph=True)[0]
     else:
-        heatmap = model.analyze(method=method, R=None, index=desired_index)
+        if R == 'one': 
+            # don't explain the logit explanations of the 'desired_index' class, but a unit of relavance in it's position.
+            R_unmasked = torch.ones_like(acc)
+        else:
+            R_unmasked = None
+        heatmap = model.analyze(method=method, R=R_unmasked, index=desired_index)
 
     if method == ExplainingMethod.grad_times_input or method == ExplainingMethod.integrated_grad:
         heatmap = heatmap * x
