@@ -41,7 +41,7 @@ class ExplainableNet(nn.Module):
         elif hasattr(model, 'features') and hasattr(model, 'classifier'):
             layers = list(model.features) + list(model.classifier)
         else:
-            raise "Unsupported Network Architecture."
+            raise Exception("Unsupported Network Architecture.")
 
         lrp_rule = self.lrp_rule_first_layer
 
