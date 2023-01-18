@@ -68,17 +68,18 @@ def get_expl(model, x, method, desired_index=None, R=None, forward_result=None, 
     if forward_result is None:
         acc, class_idx = model.classify(x)
     else:                      
-        assert forward_result.ndim == 2
+        assert torch.all(x == model.layers[0].X), "Only pass the forward result, if it came out of the last executed forward pass of the ExplaiableModel."
         acc, class_idx = forward_result, forward_result.argmax(axis=1)
 
+    batch_size, n_classes = acc.shape
+    assert batch_size==len(x), f"Size of input x ({x.shape}) and {'' if forward_result is None else 'pre-'}computed network output ({acc.shape}) do not match."
+        
     ret = []
     
     if desired_index is None:
         desired_index = class_idx
 
     elif desired_index == 'other': # explain a random class (other than the predicted class)
-        batch_size, n_classes = acc.shape
-
         # make choice of 'other' class pseudorandom, dependent on current batch.
         torch.manual_seed(seed)
         seed_for_batch = (class_idx * torch.randint(low=-50, high=51, size=(batch_size,))).sum()
